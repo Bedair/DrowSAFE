@@ -1,55 +1,49 @@
-# Prerequisites
-*.d
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg
+*.egg-info/
+dist/
+build/
+eggs/
+parts/
+var/
+sdist/
+develop-eggs/
+.installed.cfg
+lib/
+lib64/
 
-# Object files
-*.o
-*.ko
-*.obj
-*.elf
+# Virtual environment
+venv/
+env/
+ENV/
 
-# Linker output
-*.ilk
-*.map
-*.exp
+# Logs (runtime generated — not tracked)
+logs/*.csv
+logs/*.log
 
-# Precompiled Headers
-*.gch
-*.pch
+# OS
+.DS_Store
+Thumbs.db
 
-# Libraries
-*.lib
-*.a
-*.la
-*.lo
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
 
-# Shared objects (inc. Windows DLLs)
-*.dll
-*.so
-*.so.*
-*.dylib
+# Secrets / credentials
+*.env
+.env
 
-# Executables
-*.exe
-*.out
-*.app
-*.i*86
-*.x86_64
-*.hex
+# Compiled assets
+assets/fonts/*.pyc
 
-# Debug files
-*.dSYM/
-*.su
-*.idb
-*.pdb
-
-# Kernel Module Compile Results
-*.mod*
-*.cmd
-.tmp_versions/
-modules.order
-Module.symvers
-Mkfile.old
-dkms.conf
-
-# debug information files
-*.dwo
+# Test cache
+.pytest_cache/
+.coverage
+htmlcov/

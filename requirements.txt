@@ -1,0 +1,13 @@
+# DrowSAFE Python Dependencies
+# Install via: pip install -r requirements.txt
+# Note: opencv-python is installed at system level on Raspberry Pi OS
+# (python3-opencv via apt). The venv uses --system-site-packages to access it.
+
+mediapipe>=0.10.0
+onnxruntime>=1.17.0
+pygame>=2.5.0
+numpy>=1.24.0
+scipy>=1.11.0
+Pillow>=10.0.0
+psutil>=5.9.0
+RPi.GPIO>=0.7.1
