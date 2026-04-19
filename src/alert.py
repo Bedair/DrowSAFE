@@ -4,6 +4,9 @@ DrowSAFE — Alert controller.
 Drives the GPIO buzzer based on the current alert level.
 Uses a background thread so buzzer PWM never blocks the main pipeline.
 
+Uses lgpio (the correct GPIO library for Raspberry Pi 5 on Bookworm).
+RPi.GPIO is not supported on Pi 5 — lgpio is its replacement.
+
 Alert behaviours
 ----------------
   Level 0 (ALERT)    : buzzer off
@@ -18,13 +21,16 @@ import logging
 log = logging.getLogger("drowsafe.alert")
 
 try:
-    import RPi.GPIO as GPIO
+    import lgpio
+    _GPIO_CHIP = lgpio.gpiochip_open(0)
     _GPIO_AVAILABLE = True
-except (ImportError, RuntimeError):
+    log.info("lgpio initialised successfully.")
+except (ImportError, RuntimeError, Exception) as e:
     _GPIO_AVAILABLE = False
+    _GPIO_CHIP = None
     log.warning(
-        "RPi.GPIO not available — running in simulation mode. "
-        "Buzzer alerts will be logged only."
+        "lgpio not available (%s) — running in simulation mode. "
+        "Buzzer alerts will be logged only.", e
     )
 
 from config.config import BUZZER_PIN, BUZZER_WARNING_HZ, BUZZER_CRITICAL_HZ
@@ -40,18 +46,16 @@ class AlertController:
     """
 
     def __init__(self):
-        self._level    = ALERT
-        self._running  = True
-        self._lock     = threading.Lock()
-        self._thread   = threading.Thread(
+        self._level   = ALERT
+        self._running = True
+        self._lock    = threading.Lock()
+        self._thread  = threading.Thread(
             target=self._buzzer_loop, daemon=True, name="buzzer"
         )
 
         if _GPIO_AVAILABLE:
-            GPIO.setmode(GPIO.BCM)
-            GPIO.setup(BUZZER_PIN, GPIO.OUT)
-            GPIO.output(BUZZER_PIN, GPIO.LOW)
-            log.info("GPIO initialised on BCM pin %d.", BUZZER_PIN)
+            lgpio.gpio_claim_output(_GPIO_CHIP, BUZZER_PIN, 0)
+            log.info("GPIO pin %d (BCM) claimed as output.", BUZZER_PIN)
 
         self._thread.start()
         log.info("AlertController started.")
@@ -62,14 +66,12 @@ class AlertController:
             self._level = alert_level
 
     def _set_buzzer(self, state: bool):
-        """Drive the buzzer pin HIGH or LOW."""
-        if _GPIO_AVAILABLE:
-            GPIO.output(BUZZER_PIN, GPIO.HIGH if state else GPIO.LOW)
+        """Drive the buzzer pin HIGH (True) or LOW (False)."""
+        if _GPIO_AVAILABLE and _GPIO_CHIP is not None:
+            lgpio.gpio_write(_GPIO_CHIP, BUZZER_PIN, 1 if state else 0)
 
     def _buzzer_loop(self):
-        """
-        Background thread: generates buzzer patterns based on alert level.
-        """
+        """Background thread: generates buzzer patterns based on alert level."""
         while self._running:
             with self._lock:
                 level = self._level
@@ -79,7 +81,6 @@ class AlertController:
                 time.sleep(0.1)
 
             elif level == WARNING:
-                # Intermittent beep: on for half period, off for half period
                 period = 1.0 / BUZZER_WARNING_HZ
                 self._set_buzzer(True)
                 time.sleep(period / 2)
@@ -87,14 +88,12 @@ class AlertController:
                 time.sleep(period / 2)
 
             elif level == CRITICAL:
-                # Rapid beep
                 period = 1.0 / BUZZER_CRITICAL_HZ
                 self._set_buzzer(True)
                 time.sleep(period / 2)
                 self._set_buzzer(False)
                 time.sleep(period / 2)
 
-        # Ensure buzzer is off on exit
         self._set_buzzer(False)
 
     def stop(self):
@@ -102,9 +101,10 @@ class AlertController:
         self._running = False
         self._thread.join(timeout=2.0)
 
-        if _GPIO_AVAILABLE:
-            GPIO.output(BUZZER_PIN, GPIO.LOW)
-            GPIO.cleanup(BUZZER_PIN)
-            log.info("GPIO cleaned up.")
+        if _GPIO_AVAILABLE and _GPIO_CHIP is not None:
+            lgpio.gpio_write(_GPIO_CHIP, BUZZER_PIN, 0)
+            lgpio.gpio_free(_GPIO_CHIP, BUZZER_PIN)
+            lgpio.gpiochip_close(_GPIO_CHIP)
+            log.info("lgpio GPIO cleaned up.")
 
         log.info("AlertController stopped.")

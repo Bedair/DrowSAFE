@@ -3,11 +3,15 @@
 # Note: opencv-python is installed at system level on Raspberry Pi OS
 # (python3-opencv via apt). The venv uses --system-site-packages to access it.
 
-mediapipe>=0.10.0
+# Note: on Raspberry Pi OS aarch64, mediapipe has no version constraint —
+# PyPI aarch64 wheels don't carry version metadata
+mediapipe
 onnxruntime>=1.17.0
 pygame>=2.5.0
 numpy>=1.24.0
 scipy>=1.11.0
 Pillow>=10.0.0
 psutil>=5.9.0
-RPi.GPIO>=0.7.1
+# lgpio is the correct GPIO library for Raspberry Pi 5 on Bookworm
+# (RPi.GPIO is not supported on Pi 5)
+lgpio

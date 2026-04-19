@@ -38,7 +38,7 @@ sudo apt-get install -y \
     libcamera-apps \
     libopencv-dev \
     python3-opencv \
-    libatlas-base-dev \
+    libopenblas-dev \
     libjpeg-dev \
     libpng-dev \
     libavcodec-dev \
@@ -48,12 +48,12 @@ sudo apt-get install -y \
     libgstreamer1.0-dev \
     libgstreamer-plugins-base1.0-dev \
     libegl1 \
-    libgl1-mesa-glx \
+    libgl1 \
     fonts-dejavu-core \
     git \
     curl \
-    python3-pigpio \
-    pigpio
+    python3-lgpio \
+    python3-rpi-lgpio
 
 # -----------------------------------------------------------------------------
 # 3. Python virtual environment
