@@ -86,6 +86,7 @@ class Dashboard:
         alert_level: int,
         features,
         fps: float = None,
+        simulated: bool = False,
     ):
         """
         Render one dashboard frame.
@@ -97,6 +98,7 @@ class Dashboard:
         alert_level : int    — 0 / 1 / 2
         features    : Features | None
         fps         : float | None
+        simulated   : bool   — show simulation badge if True
         """
         if not _PYGAME_AVAILABLE or self._screen is None:
             return
@@ -131,6 +133,11 @@ class Dashboard:
         if fps is not None:
             fps_surf = self._font_small.render(f"{fps:.1f} fps", True, TEXT_SECONDARY)
             self._screen.blit(fps_surf, (8, 8))
+
+        # --- Simulation badge ---
+        if simulated:
+            sim_surf = self._font_small.render("⚙ SIMULATION", True, (80, 80, 220))
+            self._screen.blit(sim_surf, (self._width - sim_surf.get_width() - 8, 8))
 
         pygame.display.flip()
         self._clock.tick(60)
