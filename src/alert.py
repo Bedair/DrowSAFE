@@ -2,16 +2,7 @@
 DrowSAFE — Alert controller.
 
 Drives the GPIO buzzer based on the current alert level.
-Uses a background thread so buzzer PWM never blocks the main pipeline.
-
 Uses lgpio (the correct GPIO library for Raspberry Pi 5 on Bookworm).
-RPi.GPIO is not supported on Pi 5 — lgpio is its replacement.
-
-Alert behaviours
-----------------
-  Level 0 (ALERT)    : buzzer off
-  Level 1 (WARNING)  : intermittent beep at BUZZER_WARNING_HZ
-  Level 2 (CRITICAL) : rapid continuous beep at BUZZER_CRITICAL_HZ
 """
 
 import threading
@@ -28,50 +19,58 @@ try:
 except (ImportError, RuntimeError, Exception) as e:
     _GPIO_AVAILABLE = False
     _GPIO_CHIP = None
-    log.warning(
-        "lgpio not available (%s) — running in simulation mode. "
-        "Buzzer alerts will be logged only.", e
-    )
+    log.warning("lgpio not available (%s) — buzzer disabled.", e)
 
 from config.config import BUZZER_PIN, BUZZER_WARNING_HZ, BUZZER_CRITICAL_HZ
 from src.state_machine import ALERT, WARNING, CRITICAL
 
 
+def _claim_pin(chip, pin):
+    """Claim GPIO output pin, freeing it first if already busy."""
+    try:
+        lgpio.gpio_claim_output(chip, pin, 0)
+        return True
+    except Exception:
+        pass
+    # Pin busy — try to free it and reclaim
+    try:
+        lgpio.gpio_free(chip, pin)
+        lgpio.gpio_claim_output(chip, pin, 0)
+        log.info("GPIO pin %d reclaimed after busy state.", pin)
+        return True
+    except Exception as e:
+        log.warning("Could not claim GPIO pin %d: %s — buzzer disabled.", pin, e)
+        return False
+
+
 class AlertController:
-    """
-    Background-threaded buzzer controller.
-
-    Safe to call `update()` every frame — it only changes hardware
-    state when the alert level changes.
-    """
-
     def __init__(self):
-        self._level   = ALERT
-        self._running = True
-        self._lock    = threading.Lock()
-        self._thread  = threading.Thread(
+        self._level    = ALERT
+        self._running  = True
+        self._lock     = threading.Lock()
+        self._pin_ok   = False
+        self._thread   = threading.Thread(
             target=self._buzzer_loop, daemon=True, name="buzzer"
         )
 
-        if _GPIO_AVAILABLE:
-            lgpio.gpio_claim_output(_GPIO_CHIP, BUZZER_PIN, 0)
-            log.info("GPIO pin %d (BCM) claimed as output.", BUZZER_PIN)
+        if _GPIO_AVAILABLE and _GPIO_CHIP is not None:
+            self._pin_ok = _claim_pin(_GPIO_CHIP, BUZZER_PIN)
 
         self._thread.start()
-        log.info("AlertController started.")
+        log.info("AlertController started (buzzer=%s).", "enabled" if self._pin_ok else "disabled")
 
     def update(self, alert_level: int):
-        """Update the target alert level (thread-safe)."""
         with self._lock:
             self._level = alert_level
 
     def _set_buzzer(self, state: bool):
-        """Drive the buzzer pin HIGH (True) or LOW (False)."""
-        if _GPIO_AVAILABLE and _GPIO_CHIP is not None:
-            lgpio.gpio_write(_GPIO_CHIP, BUZZER_PIN, 1 if state else 0)
+        if self._pin_ok and _GPIO_CHIP is not None:
+            try:
+                lgpio.gpio_write(_GPIO_CHIP, BUZZER_PIN, 1 if state else 0)
+            except Exception:
+                pass
 
     def _buzzer_loop(self):
-        """Background thread: generates buzzer patterns based on alert level."""
         while self._running:
             with self._lock:
                 level = self._level
@@ -79,32 +78,25 @@ class AlertController:
             if level == ALERT:
                 self._set_buzzer(False)
                 time.sleep(0.1)
-
             elif level == WARNING:
                 period = 1.0 / BUZZER_WARNING_HZ
-                self._set_buzzer(True)
-                time.sleep(period / 2)
-                self._set_buzzer(False)
-                time.sleep(period / 2)
-
+                self._set_buzzer(True);  time.sleep(period / 2)
+                self._set_buzzer(False); time.sleep(period / 2)
             elif level == CRITICAL:
                 period = 1.0 / BUZZER_CRITICAL_HZ
-                self._set_buzzer(True)
-                time.sleep(period / 2)
-                self._set_buzzer(False)
-                time.sleep(period / 2)
+                self._set_buzzer(True);  time.sleep(period / 2)
+                self._set_buzzer(False); time.sleep(period / 2)
 
         self._set_buzzer(False)
 
     def stop(self):
-        """Stop the buzzer thread and clean up GPIO."""
         self._running = False
         self._thread.join(timeout=2.0)
-
-        if _GPIO_AVAILABLE and _GPIO_CHIP is not None:
-            lgpio.gpio_write(_GPIO_CHIP, BUZZER_PIN, 0)
-            lgpio.gpio_free(_GPIO_CHIP, BUZZER_PIN)
-            lgpio.gpiochip_close(_GPIO_CHIP)
-            log.info("lgpio GPIO cleaned up.")
-
+        if self._pin_ok and _GPIO_CHIP is not None:
+            try:
+                lgpio.gpio_write(_GPIO_CHIP, BUZZER_PIN, 0)
+                lgpio.gpio_free(_GPIO_CHIP, BUZZER_PIN)
+                lgpio.gpiochip_close(_GPIO_CHIP)
+            except Exception:
+                pass
         log.info("AlertController stopped.")

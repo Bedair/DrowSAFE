@@ -1,7 +1,6 @@
 #!/bin/bash
 # =============================================================================
 # DrowSAFE — Launch Script
-# Activates the virtual environment and starts the main pipeline.
 # =============================================================================
 
 set -e
@@ -19,10 +18,18 @@ else
     exit 1
 fi
 
-# Set display for Pygame on the DSI touchscreen
-export DISPLAY=:0
+# --- Display setup for Pygame ---
+# When running via SSH, DISPLAY must point to the Pi's local X session.
+# The RPi Touch Display v1.1 runs on :0 by default.
+if [ -z "$DISPLAY" ]; then
+    export DISPLAY=:0
+    echo "DISPLAY set to :0 (SSH session detected)"
+fi
 
-# Disable DPMS / screen blanking during session
+# Allow the current user to connect to the X display
+xhost +local: 2>/dev/null || true
+
+# Disable screen blanking during session
 xset s off -dpms 2>/dev/null || true
 
 echo "Starting DrowSAFE..."

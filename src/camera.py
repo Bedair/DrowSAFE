@@ -1,8 +1,10 @@
 """
 DrowSAFE — Camera module.
 
-Wraps OpenCV VideoCapture for the Raspberry Pi Camera Module 3.
-Includes a SimulatedCamera for testing the dashboard without hardware.
+Wraps OpenCV VideoCapture for the Raspberry Pi Camera Module 3 NoIR.
+On Pi 5 Bookworm, uses the libcamera Python bindings via picamera2,
+which is the officially supported path replacing the old GStreamer pipeline.
+Falls back to SimulatedCamera if no camera is connected.
 """
 
 import cv2
@@ -30,120 +32,136 @@ class SimulatedCamera:
         self._frame_count += 1
         frame = np.full((self.height, self.width, 3), 40, dtype=np.uint8)
 
-        # Draw a simple face placeholder so the UI looks realistic
         cx, cy = self.width // 2, self.height // 2
-
-        # Head oval
         cv2.ellipse(frame, (cx, cy), (160, 200), 0, 0, 360, (100, 100, 100), 2)
-
-        # Eyes
         cv2.ellipse(frame, (cx - 60, cy - 40), (30, 20), 0, 0, 360, (120, 120, 120), 2)
         cv2.ellipse(frame, (cx + 60, cy - 40), (30, 20), 0, 0, 360, (120, 120, 120), 2)
-
-        # Pupils
         cv2.circle(frame, (cx - 60, cy - 40), 8, (150, 150, 150), -1)
         cv2.circle(frame, (cx + 60, cy - 40), 8, (150, 150, 150), -1)
-
-        # Mouth
         cv2.ellipse(frame, (cx, cy + 60), (50, 25), 0, 0, 180, (100, 100, 100), 2)
-
-        # Label
         cv2.putText(
             frame, "SIMULATION MODE — awaiting camera",
             (20, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (80, 80, 200), 1,
         )
-
         return frame
 
     def release(self):
         log.info("SimulatedCamera released.")
 
 
+class Picamera2Camera:
+    """
+    Camera backend using picamera2 — the officially supported
+    camera library for Raspberry Pi OS Bookworm on Pi 5.
+    Picamera2 uses libcamera natively without GStreamer.
+    """
+
+    def __init__(self, width: int = 1280, height: int = 720, fps: int = 30):
+        from picamera2 import Picamera2
+        self.width  = width
+        self.height = height
+        self._cam   = Picamera2()
+
+        config = self._cam.create_video_configuration(
+            main={"size": (width, height), "format": "BGR888"},
+            controls={"FrameRate": fps},
+        )
+        self._cam.configure(config)
+        self._cam.start()
+        log.info("Picamera2 started: %dx%d @ %d fps", width, height, fps)
+
+    def read(self):
+        frame = self._cam.capture_array("main")
+        if frame is None:
+            return None
+        # picamera2 BGR888 is already BGR — no conversion needed
+        return frame
+
+    def release(self):
+        self._cam.stop()
+        self._cam.close()
+        log.info("Picamera2 released.")
+
+
 class Camera:
     """
-    Manages frame capture from the Pi Camera Module 3.
+    Unified camera interface for DrowSAFE.
 
-    On Raspberry Pi OS (Bookworm), the recommended way to access
-    the camera via OpenCV is through the libcamera GStreamer pipeline.
-    Falls back to direct VideoCapture index if GStreamer is unavailable.
-    Falls back to SimulatedCamera if no camera is connected at all.
+    Priority order:
+      1. picamera2  — preferred on Pi 5 Bookworm (libcamera native)
+      2. OpenCV VideoCapture(0) — fallback for USB cameras / testing
+      3. SimulatedCamera — fallback when no camera hardware is present
     """
-
-    GSTREAMER_PIPELINE = (
-        "libcamerasrc ! "
-        "video/x-raw,width={w},height={h},framerate={fps}/1,format=RGBx ! "
-        "videoconvert ! "
-        "video/x-raw,format=BGR ! "
-        "appsink drop=1"
-    )
 
     def __init__(self, width: int = 1280, height: int = 720, fps: int = 30,
                  simulate: bool = False):
         self.width  = width
         self.height = height
         self.fps    = fps
-        self._cap   = None
-        self._sim   = None
+        self._backend = None
 
         if simulate:
-            self._sim = SimulatedCamera(width, height, fps)
+            self._backend = SimulatedCamera(width, height, fps)
             return
 
-        self._open()
+        self._open(width, height, fps)
 
-    def _open(self):
-        pipeline = self.GSTREAMER_PIPELINE.format(
-            w=self.width, h=self.height, fps=self.fps
-        )
+    def _open(self, width, height, fps):
+        # --- Try picamera2 first (Pi 5 Bookworm native path) ---
+        try:
+            self._backend = Picamera2Camera(width, height, fps)
+            log.info("Camera backend: picamera2")
+            return
+        except Exception as e:
+            log.warning("picamera2 failed (%s) — trying OpenCV VideoCapture...", e)
 
-        log.info("Opening camera via GStreamer libcamera pipeline...")
-        cap = cv2.VideoCapture(pipeline, cv2.CAP_GSTREAMER)
-
-        if not cap.isOpened():
-            log.warning(
-                "GStreamer pipeline failed — trying VideoCapture(0)..."
-            )
+        # --- Try OpenCV direct capture ---
+        try:
             cap = cv2.VideoCapture(0)
-            cap.set(cv2.CAP_PROP_FRAME_WIDTH,  self.width)
-            cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self.height)
-            cap.set(cv2.CAP_PROP_FPS,          self.fps)
+            cap.set(cv2.CAP_PROP_FRAME_WIDTH,  width)
+            cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
+            cap.set(cv2.CAP_PROP_FPS,          fps)
+            if cap.isOpened():
+                ret, frame = cap.read()
+                if ret and frame is not None:
+                    self._backend = _OpenCVCamera(cap)
+                    log.info("Camera backend: OpenCV VideoCapture")
+                    return
+            cap.release()
+        except Exception as e:
+            log.warning("OpenCV VideoCapture failed (%s)", e)
 
-        if not cap.isOpened():
-            log.warning(
-                "No physical camera found — falling back to SimulatedCamera. "
-                "Connect the Camera Module 3 to enable real detection."
-            )
-            self._sim = SimulatedCamera(self.width, self.height, self.fps)
-            return
-
-        self._cap = cap
-        log.info("Camera opened: %dx%d @ %d fps", self.width, self.height, self.fps)
+        # --- Final fallback: simulation ---
+        log.warning(
+            "No physical camera available — falling back to SimulatedCamera. "
+            "Connect the Camera Module 3 and ensure picamera2 is installed."
+        )
+        self._backend = SimulatedCamera(width, height, fps)
 
     def read(self):
-        if self._sim is not None:
-            return self._sim.read()
-
-        if self._cap is None:
-            return None
-
-        ret, frame = self._cap.read()
-        if not ret:
-            log.error("Frame read failed.")
-            return None
-
-        return frame
+        return self._backend.read() if self._backend else None
 
     @property
     def is_simulated(self) -> bool:
-        return self._sim is not None
+        return isinstance(self._backend, SimulatedCamera)
 
     def release(self):
-        if self._cap is not None:
-            self._cap.release()
-            self._cap = None
-        if self._sim is not None:
-            self._sim.release()
+        if self._backend:
+            self._backend.release()
         log.info("Camera released.")
 
     def __del__(self):
         self.release()
+
+
+class _OpenCVCamera:
+    """Thin wrapper to make OpenCV VideoCapture fit the same interface."""
+    def __init__(self, cap):
+        self._cap = cap
+
+    def read(self):
+        ret, frame = self._cap.read()
+        return frame if ret else None
+
+    def release(self):
+        self._cap.release()
