@@ -24,6 +24,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from config.config import (
     FRAME_WIDTH, FRAME_HEIGHT, FRAME_RATE,
+    CAMERA_FLIP,
     DISPLAY_WIDTH, DISPLAY_HEIGHT, FULLSCREEN,
     SHOW_LANDMARKS, SHOW_FPS,
 )
@@ -106,7 +107,7 @@ def main():
     # ------------------------------------------------------------------
     # Initialise subsystems
     # ------------------------------------------------------------------
-    camera        = Camera(FRAME_WIDTH, FRAME_HEIGHT, FRAME_RATE, simulate=simulate)
+    camera        = Camera(FRAME_WIDTH, FRAME_HEIGHT, FRAME_RATE, simulate=simulate, flip=CAMERA_FLIP)
 
     # In simulation mode, skip detector import (MediaPipe not needed)
     detector = None

@@ -7,6 +7,7 @@
 
 # --- Camera ---
 CAMERA_INDEX         = 0       # libcamera device index (0 = first camera)
+CAMERA_FLIP          = True   # Flip 180° — set True if camera is mounted upside down
 FRAME_WIDTH          = 1280    # Capture resolution width  (pixels)
 FRAME_HEIGHT         = 720     # Capture resolution height (pixels)
 FRAME_RATE           = 30      # Target capture FPS

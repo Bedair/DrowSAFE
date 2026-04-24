@@ -56,10 +56,11 @@ class Picamera2Camera:
     Picamera2 uses libcamera natively without GStreamer.
     """
 
-    def __init__(self, width: int = 1280, height: int = 720, fps: int = 30):
+    def __init__(self, width: int = 1280, height: int = 720, fps: int = 30, flip: bool = False):
         from picamera2 import Picamera2
         self.width  = width
         self.height = height
+        self._flip  = flip
         self._cam   = Picamera2()
 
         config = self._cam.create_video_configuration(
@@ -75,6 +76,9 @@ class Picamera2Camera:
         if frame is None:
             return None
         # picamera2 BGR888 is already BGR — no conversion needed
+        # Flip 180° if camera is mounted upside down
+        if self._flip:
+            frame = cv2.flip(frame, -1)
         return frame
 
     def release(self):
@@ -94,7 +98,7 @@ class Camera:
     """
 
     def __init__(self, width: int = 1280, height: int = 720, fps: int = 30,
-                 simulate: bool = False):
+                 simulate: bool = False, flip: bool = False):
         self.width  = width
         self.height = height
         self.fps    = fps
@@ -104,12 +108,12 @@ class Camera:
             self._backend = SimulatedCamera(width, height, fps)
             return
 
-        self._open(width, height, fps)
+        self._open(width, height, fps, flip)
 
-    def _open(self, width, height, fps):
+    def _open(self, width, height, fps, flip):
         # --- Try picamera2 first (Pi 5 Bookworm native path) ---
         try:
-            self._backend = Picamera2Camera(width, height, fps)
+            self._backend = Picamera2Camera(width, height, fps, flip=flip)
             log.info("Camera backend: picamera2")
             return
         except Exception as e:
