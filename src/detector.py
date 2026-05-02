@@ -60,22 +60,22 @@ class FaceDetector:
         annotated_frame : numpy.ndarray
             Copy of the input frame with landmarks drawn (for debug display).
         """
-        # Convert BGR → RGB for MediaPipe processing
-        rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        # Frame is already RGB (from picamera2 RGB888)
+        # MediaPipe expects RGB — pass directly, no conversion needed
+        rgb = frame.copy()
         rgb.flags.writeable = False
         results = self._face_mesh.process(rgb)
         rgb.flags.writeable = True
 
         if not results.multi_face_landmarks:
-            # Return original BGR frame unchanged
             return None, frame.copy()
 
         face_landmarks = results.multi_face_landmarks[0]
 
-        # Draw landmarks on the RGB frame (MediaPipe drawing utils expect RGB)
-        annotated_rgb = rgb.copy()
+        # Draw landmarks on RGB frame — MediaPipe drawing utils expect RGB
+        annotated = rgb.copy()
         self._mp_drawing.draw_landmarks(
-            image                        = annotated_rgb,
+            image                        = annotated,
             landmark_list                = face_landmarks,
             connections                  = self._mp_face_mesh.FACEMESH_TESSELATION,
             landmark_drawing_spec        = None,
@@ -83,7 +83,7 @@ class FaceDetector:
                 .get_default_face_mesh_tesselation_style(),
         )
         self._mp_drawing.draw_landmarks(
-            image                        = annotated_rgb,
+            image                        = annotated,
             landmark_list                = face_landmarks,
             connections                  = self._mp_face_mesh.FACEMESH_CONTOURS,
             landmark_drawing_spec        = None,
@@ -91,10 +91,8 @@ class FaceDetector:
                 .get_default_face_mesh_contours_style(),
         )
 
-        # Convert annotated frame back to BGR for the rest of the pipeline
-        annotated_bgr = cv2.cvtColor(annotated_rgb, cv2.COLOR_RGB2BGR)
-
-        return face_landmarks.landmark, annotated_bgr
+        # Return RGB annotated frame — dashboard expects RGB
+        return face_landmarks.landmark, annotated
 
     def close(self):
         self._face_mesh.close()
