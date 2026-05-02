@@ -85,7 +85,8 @@ class Dashboard:
         self._font_med   = pygame.font.SysFont("dejavusans", 28)
         self._font_small = pygame.font.SysFont("dejavusans", 20)
 
-        self._ear_low_frames = 0   # consecutive frames EAR below threshold
+        self._ear_low_frames  = 0   # consecutive frames EAR below threshold
+        self._ear_high_frames = 0   # consecutive frames EAR above threshold (grace period)
 
         log.info("Dashboard initialised (%dx%d, fullscreen=%s)", width, height, fullscreen)
 
@@ -199,11 +200,17 @@ class Dashboard:
             y += 26
 
         if features:
-            # EAR: only warn after sustained closure — ignore normal blinks
+            # EAR: only warn after sustained closure — ignore normal blinks.
+            # Uses a grace period on recovery so a brief EAR spike mid-blink
+            # does not reset the counter (MediaPipe noise during blink).
+            # Counter only resets after EAR_CONSEC_FRAMES consecutive HIGH frames.
             if features.ear < EAR_THRESHOLD:
-                self._ear_low_frames += 1
+                self._ear_low_frames  += 1
+                self._ear_high_frames  = 0
             else:
-                self._ear_low_frames = 0
+                self._ear_high_frames += 1
+                if self._ear_high_frames >= EAR_CONSEC_FRAMES:
+                    self._ear_low_frames = 0
             ear_sustained = self._ear_low_frames >= EAR_CONSEC_FRAMES
 
             metric_row("EAR",       f"{features.ear:.3f}",
