@@ -91,8 +91,10 @@ class FaceDetector:
                 .get_default_face_mesh_contours_style(),
         )
 
-        # Return RGB annotated frame — dashboard expects RGB
-        return face_landmarks.landmark, annotated
+        # MediaPipe draw_landmarks may internally modify channel order.
+        # Convert explicitly to RGB before returning to guarantee correct colours.
+        annotated_rgb = cv2.cvtColor(annotated, cv2.COLOR_BGR2RGB)
+        return face_landmarks.landmark, annotated_rgb
 
     def close(self):
         self._face_mesh.close()
