@@ -56,7 +56,8 @@ class FatigueScorer:
         self._last_score: float   = 0.0
         self._yawn_in_progress    = False
         self._nod_in_progress     = False
-        self._ear_low_count       = 0    # consecutive low-EAR frames (blink filter)
+        self._ear_low_count       = 0    # consecutive low-EAR frames
+        self._ear_high_count      = 0    # consecutive high-EAR frames (grace period)
 
         log.info("FatigueScorer ready (PERCLOS window=%ds)", PERCLOS_WINDOW_SEC)
 
@@ -82,13 +83,16 @@ class FatigueScorer:
             # No face detected — don't penalise immediately but don't reset
             return self._last_score
 
-        # --- Eye closed? (blink filter) ---
-        # Only count as closed after EAR_CONSEC_FRAMES consecutive low frames.
-        # This prevents normal blinks (~8-12 frames) from inflating PERCLOS.
+        # --- Eye closed? (blink filter with grace period) ---
+        # Counter only resets after EAR_CONSEC_FRAMES consecutive HIGH frames.
+        # This prevents a brief EAR spike mid-blink from resetting the counter.
         if features.ear < EAR_THRESHOLD:
-            self._ear_low_count += 1
+            self._ear_low_count  += 1
+            self._ear_high_count  = 0
         else:
-            self._ear_low_count = 0
+            self._ear_high_count += 1
+            if self._ear_high_count >= EAR_CONSEC_FRAMES:
+                self._ear_low_count = 0
         eye_closed = self._ear_low_count >= EAR_CONSEC_FRAMES
         self._eye_history.append((now, eye_closed))
 
@@ -167,5 +171,6 @@ class FatigueScorer:
         self._yawn_history.clear()
         self._nod_history.clear()
         self._last_score = 0.0
-        self._ear_low_count = 0
+        self._ear_low_count  = 0
+        self._ear_high_count = 0
         log.info("FatigueScorer reset.")
