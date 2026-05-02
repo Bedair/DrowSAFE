@@ -24,6 +24,14 @@ import numpy as np
 log = logging.getLogger("drowsafe.dashboard")
 
 try:
+    from config.config import EAR_THRESHOLD, EAR_CONSEC_FRAMES, MAR_THRESHOLD, HEAD_PITCH_THRESHOLD
+except ImportError:
+    EAR_THRESHOLD        = 0.22
+    EAR_CONSEC_FRAMES    = 3
+    MAR_THRESHOLD        = 0.45
+    HEAD_PITCH_THRESHOLD = 20
+
+try:
     import pygame
     _PYGAME_AVAILABLE = True
 except ImportError:
@@ -76,6 +84,8 @@ class Dashboard:
         self._font_large = pygame.font.SysFont("dejavusans", 52, bold=True)
         self._font_med   = pygame.font.SysFont("dejavusans", 28)
         self._font_small = pygame.font.SysFont("dejavusans", 20)
+
+        self._ear_low_frames = 0   # consecutive frames EAR below threshold
 
         log.info("Dashboard initialised (%dx%d, fullscreen=%s)", width, height, fullscreen)
 
@@ -189,12 +199,19 @@ class Dashboard:
             y += 26
 
         if features:
+            # EAR: only warn after sustained closure — ignore normal blinks
+            if features.ear < EAR_THRESHOLD:
+                self._ear_low_frames += 1
+            else:
+                self._ear_low_frames = 0
+            ear_sustained = self._ear_low_frames >= EAR_CONSEC_FRAMES
+
             metric_row("EAR",       f"{features.ear:.3f}",
-                       warn=features.ear < 0.22)
+                       warn=ear_sustained)
             metric_row("MAR",       f"{features.mar:.3f}",
-                       warn=features.mar > 0.60)
+                       warn=features.mar > MAR_THRESHOLD)
             metric_row("Head pitch",f"{features.head_pitch:+.1f}°",
-                       warn=abs(features.head_pitch) > 20)
+                       warn=abs(features.head_pitch) > HEAD_PITCH_THRESHOLD)
         else:
             metric_row("EAR",       "—")
             metric_row("MAR",       "—")
