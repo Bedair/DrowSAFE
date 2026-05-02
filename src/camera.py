@@ -64,7 +64,7 @@ class Picamera2Camera:
         self._cam   = Picamera2()
 
         config = self._cam.create_video_configuration(
-            main={"size": (width, height), "format": "BGR888"},
+            main={"size": (width, height), "format": "RGB888"},
             controls={"FrameRate": fps},
         )
         self._cam.configure(config)
@@ -75,8 +75,16 @@ class Picamera2Camera:
         frame = self._cam.capture_array("main")
         if frame is None:
             return None
-        # picamera2 BGR888 is already BGR — no conversion needed
-        # Flip 180° if camera is mounted upside down
+
+        # Ensure output is always 3-channel BGR regardless of picamera2 format.
+        if frame.ndim == 2:
+            frame = cv2.cvtColor(frame, cv2.COLOR_GRAY2BGR)
+        elif frame.shape[2] == 4:
+            frame = cv2.cvtColor(frame, cv2.COLOR_BGRA2BGR)
+        elif frame.shape[2] == 3:
+            # picamera2 RGB888 → convert to BGR for OpenCV/MediaPipe
+            frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+
         if self._flip:
             frame = cv2.flip(frame, -1)
         return frame
