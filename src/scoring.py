@@ -15,6 +15,7 @@ import logging
 from collections import deque
 from config.config import (
     EAR_THRESHOLD,
+    EAR_CONSEC_FRAMES,
     MAR_THRESHOLD,
     HEAD_PITCH_THRESHOLD,
     PERCLOS_WINDOW_SEC,
@@ -55,6 +56,7 @@ class FatigueScorer:
         self._last_score: float   = 0.0
         self._yawn_in_progress    = False
         self._nod_in_progress     = False
+        self._ear_low_count       = 0    # consecutive low-EAR frames (blink filter)
 
         log.info("FatigueScorer ready (PERCLOS window=%ds)", PERCLOS_WINDOW_SEC)
 
@@ -80,8 +82,14 @@ class FatigueScorer:
             # No face detected — don't penalise immediately but don't reset
             return self._last_score
 
-        # --- Eye closed? ---
-        eye_closed = features.ear < EAR_THRESHOLD
+        # --- Eye closed? (blink filter) ---
+        # Only count as closed after EAR_CONSEC_FRAMES consecutive low frames.
+        # This prevents normal blinks (~8-12 frames) from inflating PERCLOS.
+        if features.ear < EAR_THRESHOLD:
+            self._ear_low_count += 1
+        else:
+            self._ear_low_count = 0
+        eye_closed = self._ear_low_count >= EAR_CONSEC_FRAMES
         self._eye_history.append((now, eye_closed))
 
         # --- Yawning? (rising edge detection) ---
@@ -159,4 +167,5 @@ class FatigueScorer:
         self._yawn_history.clear()
         self._nod_history.clear()
         self._last_score = 0.0
+        self._ear_low_count = 0
         log.info("FatigueScorer reset.")
