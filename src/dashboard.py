@@ -24,10 +24,11 @@ import numpy as np
 log = logging.getLogger("drowsafe.dashboard")
 
 try:
-    from config.config import EAR_THRESHOLD, EAR_CONSEC_FRAMES, MAR_THRESHOLD, HEAD_PITCH_THRESHOLD
+    from config.config import EAR_THRESHOLD, EAR_CONSEC_FRAMES, EAR_RECOVERY_FRAMES, MAR_THRESHOLD, HEAD_PITCH_THRESHOLD
 except ImportError:
     EAR_THRESHOLD        = 0.22
-    EAR_CONSEC_FRAMES    = 3
+    EAR_CONSEC_FRAMES    = 20
+    EAR_RECOVERY_FRAMES  = 3
     MAR_THRESHOLD        = 0.45
     HEAD_PITCH_THRESHOLD = 20
 
@@ -157,22 +158,23 @@ class Dashboard:
         """Scale and blit the camera frame to the left panel."""
         import cv2
 
-        # Frame is RGB throughout the pipeline (picamera2 RGB888 native)
-        # Handle edge cases only
+        # Normalise to 3-channel
         if frame.ndim == 2:
             frame = cv2.cvtColor(frame, cv2.COLOR_GRAY2RGB)
         elif frame.shape[2] == 4:
-            frame = cv2.cvtColor(frame, cv2.COLOR_BGRA2RGB)
+            frame = frame[:, :, :3]
 
-        # Scale to fit panel maintaining aspect ratio
+        # Scale to fit panel
         h, w  = frame.shape[:2]
         scale = min(cam_w / w, cam_h / h)
         nw, nh = int(w * scale), int(h * scale)
         frame = cv2.resize(frame, (nw, nh))
 
-        # Swap R and B channels — SDL on Pi interprets RGB buffer as BGR
-        frame = frame[:, :, ::-1]
-        surface = pygame.image.frombuffer(frame.tobytes(), (nw, nh), "RGB")
+        # Convert to pygame Surface using numpy transpose (proven reliable method)
+        # frame is RGB, transpose to (width, height, 3) for surfarray
+        surface = pygame.surfarray.make_surface(
+            np.ascontiguousarray(np.transpose(frame, (1, 0, 2)))
+        )
 
         # Centre in panel
         ox = (cam_w - nw) // 2
@@ -210,17 +212,21 @@ class Dashboard:
             y += 26
 
         if features:
-            # EAR: only warn after sustained closure — ignore normal blinks.
-            # Uses a grace period on recovery so a brief EAR spike mid-blink
-            # does not reset the counter (MediaPipe noise during blink).
-            # Counter only resets after EAR_CONSEC_FRAMES consecutive HIGH frames.
+            # EAR blink filter:
+            # - Low counter increments while EAR below threshold
+            # - Low counter resets only after EAR_RECOVERY_FRAMES consecutive
+            #   frames above threshold (avoids mid-blink noise resetting it)
+            # - Warning only fires after EAR_CONSEC_FRAMES sustained low frames
+            # - A normal blink (~12 frames) resets cleanly after 3 recovery frames
+            # - Drowsy closure (20+ frames) triggers the warning
             if features.ear < EAR_THRESHOLD:
                 self._ear_low_frames  += 1
                 self._ear_high_frames  = 0
             else:
                 self._ear_high_frames += 1
-                if self._ear_high_frames >= EAR_CONSEC_FRAMES:
-                    self._ear_low_frames = 0
+                if self._ear_high_frames >= EAR_RECOVERY_FRAMES:
+                    self._ear_low_frames  = 0
+                    self._ear_high_frames = 0
             ear_sustained = self._ear_low_frames >= EAR_CONSEC_FRAMES
 
             metric_row("EAR",       f"{features.ear:.3f}",

@@ -16,6 +16,7 @@ from collections import deque
 from config.config import (
     EAR_THRESHOLD,
     EAR_CONSEC_FRAMES,
+    EAR_RECOVERY_FRAMES,
     MAR_THRESHOLD,
     HEAD_PITCH_THRESHOLD,
     PERCLOS_WINDOW_SEC,
@@ -83,16 +84,15 @@ class FatigueScorer:
             # No face detected — don't penalise immediately but don't reset
             return self._last_score
 
-        # --- Eye closed? (blink filter with grace period) ---
-        # Counter only resets after EAR_CONSEC_FRAMES consecutive HIGH frames.
-        # This prevents a brief EAR spike mid-blink from resetting the counter.
+        # --- Eye closed? (blink filter) ---
         if features.ear < EAR_THRESHOLD:
             self._ear_low_count  += 1
             self._ear_high_count  = 0
         else:
             self._ear_high_count += 1
-            if self._ear_high_count >= EAR_CONSEC_FRAMES:
-                self._ear_low_count = 0
+            if self._ear_high_count >= EAR_RECOVERY_FRAMES:
+                self._ear_low_count  = 0
+                self._ear_high_count = 0
         eye_closed = self._ear_low_count >= EAR_CONSEC_FRAMES
         self._eye_history.append((now, eye_closed))
 
