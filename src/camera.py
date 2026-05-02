@@ -65,7 +65,7 @@ class Picamera2Camera:
         self._cam   = Picamera2()
 
         config = self._cam.create_video_configuration(
-            main={"size": (width, height), "format": "RGB888"},
+            main={"size": (width, height), "format": "BGR888"},
             controls={"FrameRate": fps},
         )
         self._cam.configure(config)
@@ -84,18 +84,13 @@ class Picamera2Camera:
         elif frame.shape[2] == 4:
             frame = frame[:, :, :3]
 
-        # Debug: print raw channel values BEFORE any swap
-        import sys
-        r, g, b = frame[:,:,0].mean(), frame[:,:,1].mean(), frame[:,:,2].mean()
-        print(f"[RAW CAMERA] ch0={r:.1f} ch1={g:.1f} ch2={b:.1f} shape={frame.shape}", file=sys.stderr)
-
-        # Optionally swap R↔B if display shows wrong colours
-        try:
-            from config.config import CAMERA_SWAP_RGB
-            if CAMERA_SWAP_RGB:
-                frame = frame[:, :, ::-1].copy()
-        except ImportError:
-            pass
+        # BGR888 from picamera2 — convert to RGB for the pipeline
+        if frame.ndim == 2:
+            frame = cv2.cvtColor(frame, cv2.COLOR_GRAY2RGB)
+        elif frame.shape[2] == 4:
+            frame = cv2.cvtColor(frame, cv2.COLOR_BGRA2RGB)
+        elif frame.shape[2] == 3:
+            frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
 
         if self._flip:
             frame = cv2.flip(frame, -1)
