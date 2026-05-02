@@ -20,7 +20,7 @@ FULLSCREEN           = True    # Run dashboard fullscreen on DSI display
 # --- EAR  (Eye Aspect Ratio) ---
 # EAR = (vertical eye span) / (horizontal eye span)
 # Drops sharply on blink; stays low on sustained closure.
-EAR_THRESHOLD        = 0.17   # Below this value → eye is considered closed
+EAR_THRESHOLD        = 0.17   # Eye considered closed below this (calibrated)
 EAR_CONSEC_FRAMES    = 20     # Frames of sustained closure to trigger warning (~670ms @ 30fps)
 EAR_RECOVERY_FRAMES  = 3      # Frames of open eyes needed to reset the closure counter
                                   # Normal blink = 8–12 frames, drowsy closure = 15+ frames
@@ -71,5 +71,5 @@ LOG_DIR              = "logs"
 LOG_EVENTS           = True   # Write drowsiness events to timestamped CSV
 
 # --- Debug ---
-SHOW_LANDMARKS       = False  # Set True to overlay MediaPipe mesh (dev/calibration mode)
+SHOW_LANDMARKS       = True   # Overlay MediaPipe mesh on camera feed (dev mode)
 SHOW_FPS             = True   # Display FPS counter on dashboard
