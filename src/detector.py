@@ -60,8 +60,7 @@ class FaceDetector:
         annotated_frame : numpy.ndarray
             Copy of the input frame with landmarks drawn (for debug display).
         """
-        # Frame is already RGB (from picamera2 RGB888)
-        # MediaPipe expects RGB — pass directly, no conversion needed
+        # Pass frame directly to MediaPipe (expects RGB, camera now outputs RGB)
         rgb = frame.copy()
         rgb.flags.writeable = False
         results = self._face_mesh.process(rgb)
@@ -72,8 +71,8 @@ class FaceDetector:
 
         face_landmarks = results.multi_face_landmarks[0]
 
-        # Draw landmarks on RGB frame — MediaPipe drawing utils expect RGB
-        annotated = rgb.copy()
+        # Draw landmarks on a copy of the frame
+        annotated = frame.copy()
         self._mp_drawing.draw_landmarks(
             image                        = annotated,
             landmark_list                = face_landmarks,
@@ -91,10 +90,7 @@ class FaceDetector:
                 .get_default_face_mesh_contours_style(),
         )
 
-        # MediaPipe draw_landmarks may internally modify channel order.
-        # Convert explicitly to RGB before returning to guarantee correct colours.
-        annotated_rgb = cv2.cvtColor(annotated, cv2.COLOR_BGR2RGB)
-        return face_landmarks.landmark, annotated_rgb
+        return face_landmarks.landmark, annotated
 
     def close(self):
         self._face_mesh.close()

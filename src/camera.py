@@ -77,13 +77,25 @@ class Picamera2Camera:
         if frame is None:
             return None
 
-        # picamera2 RGB888 delivers native RGB — keep as-is.
-        # Handle edge cases only.
+        # Normalise to 3-channel
         if frame.ndim == 2:
-            frame = cv2.cvtColor(frame, cv2.COLOR_GRAY2RGB)
+            frame = cv2.cvtColor(frame, cv2.COLOR_GRAY2BGR)
+            frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         elif frame.shape[2] == 4:
-            frame = cv2.cvtColor(frame, cv2.COLOR_BGRA2RGB)
-        # 3-channel RGB888 — no conversion needed
+            frame = frame[:, :, :3]
+
+        # Debug: print raw channel values BEFORE any swap
+        import sys
+        r, g, b = frame[:,:,0].mean(), frame[:,:,1].mean(), frame[:,:,2].mean()
+        print(f"[RAW CAMERA] ch0={r:.1f} ch1={g:.1f} ch2={b:.1f} shape={frame.shape}", file=sys.stderr)
+
+        # Optionally swap R↔B if display shows wrong colours
+        try:
+            from config.config import CAMERA_SWAP_RGB
+            if CAMERA_SWAP_RGB:
+                frame = frame[:, :, ::-1].copy()
+        except ImportError:
+            pass
 
         if self._flip:
             frame = cv2.flip(frame, -1)

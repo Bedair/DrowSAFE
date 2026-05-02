@@ -164,14 +164,6 @@ class Dashboard:
         elif frame.shape[2] == 4:
             frame = frame[:, :, :3]
 
-        # Debug: print channel means once to confirm RGB vs BGR
-        if not hasattr(self, '_color_debug_done'):
-            self._color_debug_done = True
-            import sys
-            r, g, b = frame[:,:,0].mean(), frame[:,:,1].mean(), frame[:,:,2].mean()
-            print(f"[COLOR DEBUG] ch0(R?)={r:.1f} ch1(G?)={g:.1f} ch2(B?)={b:.1f}", file=sys.stderr)
-            print(f"[COLOR DEBUG] shape={frame.shape}", file=sys.stderr)
-
         # Scale to fit panel
         h, w  = frame.shape[:2]
         scale = min(cam_w / w, cam_h / h)
