@@ -25,7 +25,7 @@ EAR_CONSEC_FRAMES    = 3      # Closed frames in a row to register as a blink
 
 # --- MAR  (Mouth Aspect Ratio) ---
 # Same geometry as EAR but applied to mouth landmarks.
-MAR_THRESHOLD        = 0.60   # Above this value → yawn detected
+MAR_THRESHOLD        = 0.45   # Above this → yawn detected (new direct ratio: rest~0.05, yawn~0.6)
 MAR_CONSEC_FRAMES    = 15     # Consecutive frames above threshold to confirm yawn
 
 # --- Head Pose ---
