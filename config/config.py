@@ -20,7 +20,7 @@ FULLSCREEN           = True    # Run dashboard fullscreen on DSI display
 # --- EAR  (Eye Aspect Ratio) ---
 # EAR = (vertical eye span) / (horizontal eye span)
 # Drops sharply on blink; stays low on sustained closure.
-EAR_THRESHOLD        = 0.22   # Below this value → eye is considered closed
+EAR_THRESHOLD        = 0.18   # Below this value → eye is considered closed
 EAR_CONSEC_FRAMES    = 3      # Closed frames in a row to register as a blink
 
 # --- MAR  (Mouth Aspect Ratio) ---
