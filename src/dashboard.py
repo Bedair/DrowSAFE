@@ -157,11 +157,12 @@ class Dashboard:
         """Scale and blit the camera frame to the left panel."""
         import cv2
 
-        # Ensure frame is 3-channel BGR before any processing
+        # Frame is RGB throughout the pipeline (picamera2 RGB888 native)
+        # Handle edge cases only
         if frame.ndim == 2:
-            frame = cv2.cvtColor(frame, cv2.COLOR_GRAY2BGR)
+            frame = cv2.cvtColor(frame, cv2.COLOR_GRAY2RGB)
         elif frame.shape[2] == 4:
-            frame = cv2.cvtColor(frame, cv2.COLOR_BGRA2BGR)
+            frame = cv2.cvtColor(frame, cv2.COLOR_BGRA2RGB)
 
         # Scale to fit panel maintaining aspect ratio
         h, w  = frame.shape[:2]
@@ -169,11 +170,8 @@ class Dashboard:
         nw, nh = int(w * scale), int(h * scale)
         frame = cv2.resize(frame, (nw, nh))
 
-        # Convert BGR → RGB for Pygame
-        rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-
-        # pygame.image.frombuffer is faster and more reliable than surfarray
-        surface = pygame.image.frombuffer(rgb.tobytes(), (nw, nh), "RGB")
+        # Frame is already RGB — pass directly to Pygame, no conversion needed
+        surface = pygame.image.frombuffer(frame.tobytes(), (nw, nh), "RGB")
 
         # Centre in panel
         ox = (cam_w - nw) // 2

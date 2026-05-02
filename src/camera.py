@@ -41,9 +41,10 @@ class SimulatedCamera:
         cv2.ellipse(frame, (cx, cy + 60), (50, 25), 0, 0, 180, (100, 100, 100), 2)
         cv2.putText(
             frame, "SIMULATION MODE — awaiting camera",
-            (20, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (80, 80, 200), 1,
+            (20, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (200, 80, 80), 1,
         )
-        return frame
+        # Output RGB to match picamera2 native format used throughout pipeline
+        return cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
 
     def release(self):
         log.info("SimulatedCamera released.")
@@ -76,14 +77,13 @@ class Picamera2Camera:
         if frame is None:
             return None
 
-        # Ensure output is always 3-channel BGR regardless of picamera2 format.
+        # picamera2 RGB888 delivers native RGB — keep as-is.
+        # Handle edge cases only.
         if frame.ndim == 2:
-            frame = cv2.cvtColor(frame, cv2.COLOR_GRAY2BGR)
+            frame = cv2.cvtColor(frame, cv2.COLOR_GRAY2RGB)
         elif frame.shape[2] == 4:
-            frame = cv2.cvtColor(frame, cv2.COLOR_BGRA2BGR)
-        elif frame.shape[2] == 3:
-            # picamera2 RGB888 → convert to BGR for OpenCV/MediaPipe
-            frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+            frame = cv2.cvtColor(frame, cv2.COLOR_BGRA2RGB)
+        # 3-channel RGB888 — no conversion needed
 
         if self._flip:
             frame = cv2.flip(frame, -1)
