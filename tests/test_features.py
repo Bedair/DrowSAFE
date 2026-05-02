@@ -11,7 +11,7 @@ import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from src.features import _aspect_ratio, _euclidean, FeatureExtractor, LEFT_EYE
+from src.features import _aspect_ratio, _euclidean, _mouth_opening_ratio, FeatureExtractor, LEFT_EYE
 
 
 # ---------------------------------------------------------------------------
@@ -45,34 +45,19 @@ class TestEuclidean:
 
 
 class TestAspectRatio:
-    """
-    Build a synthetic eye where EAR is deterministic:
-    Horizontal span = 1.0, each vertical span = 0.4 → EAR = 0.4
-    """
-
     def _make_eye_landmarks(self, ear_target: float):
-        """
-        Create a minimal landmark list where the 6 eye points yield ear_target.
-        Indices used: LEFT_EYE = [362, 385, 387, 263, 373, 380]
-        Layout:
-          p0=left, p1=top-left, p2=top-right, p3=right, p4=bot-right, p5=bot-left
-        EAR = (|p1-p5| + |p2-p4|) / (2*|p0-p3|)
-        Choose: p0=(0,0.5), p3=(1,0.5), p1=p2=(0.5, 0.5-v), p4=p5=(0.5, 0.5+v)
-        → EAR = 2v / (2*1) = v
-        """
         v = ear_target
         lms = [FakeLandmark(0.5, 0.5)] * 468
-        lms[362] = FakeLandmark(0.0, 0.5)   # p0 left
-        lms[385] = FakeLandmark(0.5, 0.5 - v)  # p1 top-left
-        lms[387] = FakeLandmark(0.5, 0.5 - v)  # p2 top-right
-        lms[263] = FakeLandmark(1.0, 0.5)   # p3 right
-        lms[373] = FakeLandmark(0.5, 0.5 + v)  # p4 bot-right
-        lms[380] = FakeLandmark(0.5, 0.5 + v)  # p5 bot-left
+        lms[362] = FakeLandmark(0.0, 0.5)
+        lms[385] = FakeLandmark(0.5, 0.5 - v)
+        lms[387] = FakeLandmark(0.5, 0.5 - v)
+        lms[263] = FakeLandmark(1.0, 0.5)
+        lms[373] = FakeLandmark(0.5, 0.5 + v)
+        lms[380] = FakeLandmark(0.5, 0.5 + v)
         return lms
 
     def test_ear_open_eye(self):
         lms = self._make_eye_landmarks(0.3)
-        # Frame 1×1 px so normalised coords equal pixel coords
         ear = _aspect_ratio(lms, LEFT_EYE, 1, 1)
         assert ear == pytest.approx(0.3, abs=1e-6)
 
@@ -82,10 +67,40 @@ class TestAspectRatio:
         assert ear == pytest.approx(0.05, abs=1e-6)
 
     def test_ear_zero_horizontal_span(self):
-        """All 6 points coincident → should return 0 (no div-by-zero)."""
         lms = make_landmarks()
         ear = _aspect_ratio(lms, LEFT_EYE, 1, 1)
         assert ear == pytest.approx(0.0)
+
+
+class TestMouthOpeningRatio:
+    def _make_mouth_landmarks(self, opening: float, width: float = 1.0):
+        """MAR = opening / width — both controllable."""
+        lms = [FakeLandmark(0.5, 0.5)] * 468
+        lms[13]  = FakeLandmark(0.5, 0.5 - opening / 2)  # top
+        lms[14]  = FakeLandmark(0.5, 0.5 + opening / 2)  # bottom
+        lms[78]  = FakeLandmark(0.5 - width / 2, 0.5)    # left
+        lms[308] = FakeLandmark(0.5 + width / 2, 0.5)    # right
+        return lms
+
+    def test_closed_mouth_near_zero(self):
+        lms = self._make_mouth_landmarks(opening=0.01)
+        mar = _mouth_opening_ratio(lms, 1, 1)
+        assert mar < 0.05
+
+    def test_yawning_mouth_high(self):
+        lms = self._make_mouth_landmarks(opening=0.6)
+        mar = _mouth_opening_ratio(lms, 1, 1)
+        assert mar == pytest.approx(0.6, abs=1e-6)
+
+    def test_ratio_scales_with_opening(self):
+        lms_small = self._make_mouth_landmarks(opening=0.1)
+        lms_large = self._make_mouth_landmarks(opening=0.6)
+        assert _mouth_opening_ratio(lms_large, 1, 1) > _mouth_opening_ratio(lms_small, 1, 1)
+
+    def test_zero_width_returns_zero(self):
+        lms = make_landmarks()  # all at (0.5, 0.5) — zero width
+        mar = _mouth_opening_ratio(lms, 1, 1)
+        assert mar == pytest.approx(0.0)
 
 
 # ---------------------------------------------------------------------------

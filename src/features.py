@@ -27,8 +27,15 @@ log = logging.getLogger("drowsafe.features")
 LEFT_EYE  = [362, 385, 387, 263, 373, 380]
 RIGHT_EYE = [33,  160, 158, 133, 153, 144]
 
-# Mouth — 6-point MAR model
-MOUTH     = [61,  291, 39,  181, 269, 405]
+# Mouth — direct vertical opening ratio
+# Upper inner lip: 13, Lower inner lip: 14
+# Left mouth corner: 78, Right mouth corner: 308
+# MAR = vertical_opening / mouth_width
+# Resting: ~0.0–0.15  |  Yawning: ~0.5–0.8
+MOUTH_TOP    = 13    # Upper inner lip centre
+MOUTH_BOTTOM = 14    # Lower inner lip centre
+MOUTH_LEFT   = 78    # Left mouth corner
+MOUTH_RIGHT  = 308   # Right mouth corner
 
 # 6 canonical 3D-to-2D correspondence points for head pose (PnP solve)
 # Indices: nose tip, chin, left eye corner, right eye corner, left mouth, right mouth
@@ -61,6 +68,35 @@ class Features:
 def _euclidean(p1, p2) -> float:
     """Euclidean distance between two 2D points."""
     return np.linalg.norm(np.array(p1) - np.array(p2))
+
+
+def _mouth_opening_ratio(landmarks, frame_w: int, frame_h: int) -> float:
+    """
+    Compute mouth opening as a ratio of vertical gap to mouth width.
+
+    Uses 4 reliable MediaPipe inner-lip landmarks:
+      - MOUTH_TOP (13)    upper inner lip centre
+      - MOUTH_BOTTOM (14) lower inner lip centre
+      - MOUTH_LEFT (78)   left mouth corner
+      - MOUTH_RIGHT (308) right mouth corner
+
+    MAR = vertical_gap / mouth_width
+    Typical values:
+      Resting (closed): 0.00 – 0.15
+      Slight open:      0.15 – 0.35
+      Yawning:          0.45 – 0.80
+    """
+    top    = (landmarks[MOUTH_TOP].x    * frame_w, landmarks[MOUTH_TOP].y    * frame_h)
+    bottom = (landmarks[MOUTH_BOTTOM].x * frame_w, landmarks[MOUTH_BOTTOM].y * frame_h)
+    left   = (landmarks[MOUTH_LEFT].x   * frame_w, landmarks[MOUTH_LEFT].y   * frame_h)
+    right  = (landmarks[MOUTH_RIGHT].x  * frame_w, landmarks[MOUTH_RIGHT].y  * frame_h)
+
+    vertical = _euclidean(top, bottom)
+    width    = _euclidean(left, right)
+
+    if width < 1e-6:
+        return 0.0
+    return vertical / width
 
 
 def _aspect_ratio(landmarks, indices, frame_w: int, frame_h: int) -> float:
@@ -136,7 +172,9 @@ class FeatureExtractor:
         ear   = (ear_l + ear_r) / 2.0
 
         # --- MAR ---
-        mar = _aspect_ratio(landmarks, MOUTH, w, h)
+        # Direct vertical opening / mouth width
+        # Rises from ~0.05 at rest to ~0.6+ during a yawn
+        mar = _mouth_opening_ratio(landmarks, w, h)
 
         # --- Head pose ---
         pitch, yaw, roll = self._head_pose(landmarks)
