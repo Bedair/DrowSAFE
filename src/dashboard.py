@@ -170,7 +170,8 @@ class Dashboard:
         nw, nh = int(w * scale), int(h * scale)
         frame = cv2.resize(frame, (nw, nh))
 
-        # Frame is already RGB — pass directly to Pygame, no conversion needed
+        # Swap R and B channels — SDL on Pi interprets RGB buffer as BGR
+        frame = frame[:, :, ::-1]
         surface = pygame.image.frombuffer(frame.tobytes(), (nw, nh), "RGB")
 
         # Centre in panel
