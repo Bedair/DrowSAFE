@@ -228,8 +228,6 @@ class Dashboard:
                     self._ear_low_frames  = 0
                     self._ear_high_frames = 0
             ear_sustained = self._ear_low_frames >= EAR_CONSEC_FRAMES
-            if self._ear_low_frames > 0:
-                import sys; print(f"[EAR] low={self._ear_low_frames} high={self._ear_high_frames} sustained={ear_sustained} ear={features.ear:.3f}", file=sys.stderr)
 
             metric_row("EAR",       f"{features.ear:.3f}",
                        warn=ear_sustained)
