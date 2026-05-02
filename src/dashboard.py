@@ -154,16 +154,27 @@ class Dashboard:
         self._clock.tick(60)
 
     def _draw_camera(self, frame, cam_w: int, cam_h: int):
-        """Scale and blit the BGR camera frame to the left panel."""
+        """Scale and blit the camera frame to the left panel."""
         import cv2
-        rgb   = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+
+        # Ensure frame is 3-channel BGR before any processing
+        if frame.ndim == 2:
+            frame = cv2.cvtColor(frame, cv2.COLOR_GRAY2BGR)
+        elif frame.shape[2] == 4:
+            frame = cv2.cvtColor(frame, cv2.COLOR_BGRA2BGR)
+
         # Scale to fit panel maintaining aspect ratio
-        h, w  = rgb.shape[:2]
+        h, w  = frame.shape[:2]
         scale = min(cam_w / w, cam_h / h)
         nw, nh = int(w * scale), int(h * scale)
-        rgb   = cv2.resize(rgb, (nw, nh))
+        frame = cv2.resize(frame, (nw, nh))
 
-        surface = pygame.surfarray.make_surface(np.transpose(rgb, (1, 0, 2)))
+        # Convert BGR → RGB for Pygame
+        rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+
+        # pygame.image.frombuffer is faster and more reliable than surfarray
+        surface = pygame.image.frombuffer(rgb.tobytes(), (nw, nh), "RGB")
+
         # Centre in panel
         ox = (cam_w - nw) // 2
         oy = (cam_h - nh) // 2
