@@ -21,7 +21,8 @@ FULLSCREEN           = True    # Run dashboard fullscreen on DSI display
 # EAR = (vertical eye span) / (horizontal eye span)
 # Drops sharply on blink; stays low on sustained closure.
 EAR_THRESHOLD        = 0.18   # Below this value → eye is considered closed
-EAR_CONSEC_FRAMES    = 3      # Closed frames in a row to register as a blink
+EAR_CONSEC_FRAMES    = 15     # Frames of sustained closure before warning (~500ms @ 30fps)
+                                  # Normal blink = 8–12 frames, drowsy closure = 15+ frames
 
 # --- MAR  (Mouth Aspect Ratio) ---
 # Same geometry as EAR but applied to mouth landmarks.
